@@ -2,6 +2,9 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::Path;
 
+mod workspace;
+use workspace::Project;
+
 #[derive(Parser)]
 #[command(name = "changement")]
 #[command(about = "Manage versioning and publishing for packages in your project")]
@@ -14,6 +17,8 @@ struct Cli {
 enum Commands {
     /// Initialize changement in a new project
     Init,
+    /// List all workspaces in the current project
+    Workspaces,
 }
 
 fn main() {
@@ -22,6 +27,12 @@ fn main() {
     match &cli.command {
         Commands::Init => {
             if let Err(e) = init_command() {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Workspaces => {
+            if let Err(e) = workspaces_command() {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
@@ -54,7 +65,57 @@ fn init_command() -> Result<(), Box<dyn std::error::Error>> {
         println!(".changes/config.json already exists");
     }
 
+    // Discover workspaces in the current project
+    match Project::load(".") {
+        Ok(project) => {
+            println!(
+                "Discovered {} workspace(s) in the project:",
+                project.workspaces.len()
+            );
+            for workspace in &project.workspaces {
+                let name = workspace.package_json.name.as_deref().unwrap_or("<unnamed>");
+                println!("  - {name} ({})", workspace.path.display());
+            }
+        }
+        Err(e) => {
+            println!("Warning: Could not discover workspaces: {e}");
+        }
+    }
+
     println!("changement initialized successfully!");
+    Ok(())
+}
+
+fn workspaces_command() -> Result<(), Box<dyn std::error::Error>> {
+    let project = Project::load(".")?;
+
+    println!("Found {} workspace(s):", project.workspaces.len());
+
+    for workspace in &project.workspaces {
+        let name = workspace.package_json.name.as_deref().unwrap_or("<unnamed>");
+        let version = workspace.package_json.version.as_deref().unwrap_or("<no version>");
+        let private = workspace.package_json.private.unwrap_or(false);
+
+        println!();
+        println!("📦 {name} ({version})");
+        println!("   Path: {}", workspace.path.display());
+        println!("   Private: {private}");
+
+        if let Some(workspace_patterns) = &workspace.package_json.workspaces {
+            if !workspace_patterns.is_empty() {
+                println!("   Workspace patterns: {workspace_patterns:?}");
+            }
+        }
+
+        if !workspace.children.is_empty() {
+            println!("   Child workspaces: {}", workspace.children.len());
+            for child in &workspace.children {
+                let child_name = child.package_json.name.as_deref().unwrap_or("<unnamed>");
+                println!("     - {child_name}");
+            }
+        }
+    }
+
     Ok(())
 }
 
