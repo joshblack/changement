@@ -8,6 +8,12 @@
 npm i -g changement
 ```
 
+## Global Options
+
+| Option            | Description                           |
+| :---------------- | :------------------------------------ |
+| `-v`, `--verbose` | Enable verbose logging for debug output |
+
 ## Commands
 
 | Command   | Description                                                           |
