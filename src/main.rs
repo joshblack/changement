@@ -22,7 +22,7 @@ fn main() {
     match &cli.command {
         Commands::Init => {
             if let Err(e) = init_command() {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }
@@ -31,7 +31,7 @@ fn main() {
 
 fn init_command() -> Result<(), Box<dyn std::error::Error>> {
     let changes_dir = Path::new(".changes");
-    
+
     // Create .changes directory if it doesn't exist
     if !changes_dir.exists() {
         fs::create_dir(changes_dir)?;
@@ -39,9 +39,9 @@ fn init_command() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!(".changes directory already exists");
     }
-    
+
     let config_path = changes_dir.join("config.json");
-    
+
     // Create config.json if it doesn't exist
     if !config_path.exists() {
         let config_content = r#"{
@@ -53,7 +53,15 @@ fn init_command() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!(".changes/config.json already exists");
     }
-    
+
     println!("changement initialized successfully!");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_example() {
+        assert_eq!(true, true);
+    }
 }
