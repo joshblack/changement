@@ -73,7 +73,11 @@ fn init_command() -> Result<(), Box<dyn std::error::Error>> {
                 project.workspaces.len()
             );
             for workspace in &project.workspaces {
-                let name = workspace.package_json.name.as_deref().unwrap_or("<unnamed>");
+                let name = workspace
+                    .package_json
+                    .name
+                    .as_deref()
+                    .unwrap_or("<unnamed>");
                 println!("  - {name} ({})", workspace.path.display());
             }
         }
@@ -92,8 +96,16 @@ fn workspaces_command() -> Result<(), Box<dyn std::error::Error>> {
     println!("Found {} workspace(s):", project.workspaces.len());
 
     for workspace in &project.workspaces {
-        let name = workspace.package_json.name.as_deref().unwrap_or("<unnamed>");
-        let version = workspace.package_json.version.as_deref().unwrap_or("<no version>");
+        let name = workspace
+            .package_json
+            .name
+            .as_deref()
+            .unwrap_or("<unnamed>");
+        let version = workspace
+            .package_json
+            .version
+            .as_deref()
+            .unwrap_or("<no version>");
         let private = workspace.package_json.private.unwrap_or(false);
 
         println!();
