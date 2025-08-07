@@ -1,6 +1,17 @@
 use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::Path;
+use anyhow::Result;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ChangementError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+    
+    #[error("Configuration error: {0}")]
+    Config(String),
+}
 
 #[derive(Parser)]
 #[command(name = "changement")]
@@ -19,17 +30,17 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
-    match &cli.command {
-        Commands::Init => {
-            if let Err(e) = init_command() {
-                eprintln!("Error: {e}");
-                std::process::exit(1);
-            }
-        }
+    let result = match &cli.command {
+        Commands::Init => init_command(),
+    };
+
+    if let Err(e) = result {
+        eprintln!("Error: {e:?}");
+        std::process::exit(1);
     }
 }
 
-fn init_command() -> Result<(), Box<dyn std::error::Error>> {
+fn init_command() -> Result<()> {
     let changes_dir = Path::new(".changes");
 
     // Create .changes directory if it doesn't exist
@@ -60,8 +71,20 @@ fn init_command() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_example() {
         assert_eq!(true, true);
+    }
+
+    #[test]
+    fn test_changement_error_display() {
+        let error = ChangementError::Config("test config error".to_string());
+        assert_eq!(error.to_string(), "Configuration error: test config error");
+        
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let error = ChangementError::Io(io_error);
+        assert_eq!(error.to_string(), "IO error: file not found");
     }
 }
