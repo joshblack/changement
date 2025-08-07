@@ -16,6 +16,7 @@ default = []
 napi = ["dep:napi", "dep:napi-derive"]
 
 [dependencies]
+clap = { version = "4.0", features = ["derive"] }
 napi = { version = "2", default-features = false, features = ["napi4"], optional = true }
 napi-derive = { version = "2", optional = true }
 
