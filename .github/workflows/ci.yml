@@ -72,7 +72,6 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
 
   build:
-    name: Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
