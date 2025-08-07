@@ -22,7 +22,7 @@ fn main() {
     match &cli.command {
         Commands::Init => {
             if let Err(e) = init_command() {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }
