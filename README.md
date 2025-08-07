@@ -4,8 +4,25 @@
 
 ## Installation
 
+Install globally via npm:
+
 ```bash
 npm i -g changement
+```
+
+Or use in a Node.js project:
+
+```bash
+npm install changement
+```
+
+### Programmatic Usage
+
+```javascript
+const { getVersionNapi, changementMainNapi, initNapi, newChangeNapi } = require('changement');
+
+console.log('Version:', getVersionNapi());
+console.log(changementMainNapi(['help']));
 ```
 
 ## Commands
