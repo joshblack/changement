@@ -110,7 +110,7 @@ fn init_command() -> Result<()> {
 }
 
 fn new_command(package: &str, message: &str, bump: &BumpType) -> Result<()> {
-    debug!("Starting new command for package: {}", package);
+    debug!("Starting new command for package: {package}");
 
     let changes_dir = Path::new(".changes");
 
@@ -121,7 +121,7 @@ fn new_command(package: &str, message: &str, bump: &BumpType) -> Result<()> {
 
     // Generate a unique filename for this change
     let change_id = uuid::Uuid::new_v4();
-    let filename = format!("{}-{}.md", package, change_id);
+    let filename = format!("{package}-{change_id}.md");
     let file_path = changes_dir.join(filename);
 
     debug!("Creating change file: {}", file_path.display());
@@ -134,17 +134,14 @@ fn new_command(package: &str, message: &str, bump: &BumpType) -> Result<()> {
     };
 
     // Create the markdown content with YAML frontmatter
-    let content = format!("---\n\"{}\": {}\n---\n\n{}\n", package, bump_str, message);
+    let content = format!("---\n\"{package}\": {bump_str}\n---\n\n{message}\n");
 
     // Write the change file
     fs::write(&file_path, content)
         .with_context(|| format!("Failed to write change file: {}", file_path.display()))?;
 
     info!("Created change file: {}", file_path.display());
-    println!(
-        "Created change for package '{}' with {} bump",
-        package, bump_str
-    );
+    println!("Created change for package '{package}' with {bump_str} bump");
 
     Ok(())
 }
@@ -154,7 +151,11 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::Path;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    // Use a global mutex to serialize tests that change the current directory
+    static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
     fn setup_test() {
         init_logger(false);
@@ -186,6 +187,7 @@ mod tests {
 
     #[test]
     fn test_new_command_creates_change_file() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         setup_test();
         let temp_dir = TempDir::new().unwrap();
         let old_dir = std::env::current_dir().unwrap();
@@ -226,6 +228,7 @@ mod tests {
 
     #[test]
     fn test_new_command_without_init_fails() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         setup_test();
         let temp_dir = TempDir::new().unwrap();
         let old_dir = std::env::current_dir().unwrap();
@@ -246,6 +249,9 @@ mod tests {
 
     #[test]
     fn test_bump_types() {
+        let _guard = TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         setup_test();
         let temp_dir = TempDir::new().unwrap();
         let old_dir = std::env::current_dir().unwrap();
