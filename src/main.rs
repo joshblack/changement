@@ -16,17 +16,15 @@ enum Commands {
     Init,
     /// Show version information
     Version,
-    /// Show help information
-    Help,
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    
+
     // If no arguments provided, show help
     if args.is_empty() {
         let result = changement::changement_main(vec![]);
-        println!("{}", result);
+        println!("{result}");
         return;
     }
 
@@ -35,7 +33,7 @@ fn main() {
         match first_arg.as_str() {
             "version" | "help" | "--help" | "-h" => {
                 let result = changement::changement_main(args);
-                println!("{}", result);
+                println!("{result}");
                 return;
             }
             _ => {}
@@ -55,13 +53,9 @@ fn main() {
         Some(Commands::Version) => {
             println!("{}", changement::get_version());
         }
-        Some(Commands::Help) => {
-            let result = changement::changement_main(vec!["help".to_string()]);
-            println!("{}", result);
-        }
         None => {
             let result = changement::changement_main(vec![]);
-            println!("{}", result);
+            println!("{result}");
         }
     }
 }
