@@ -1,8 +1,5 @@
 #![deny(clippy::all)]
 
-#[cfg(feature = "napi")]
-use napi_derive::napi;
-
 /// Core functionality that doesn't depend on napi
 pub fn get_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
@@ -34,29 +31,4 @@ pub fn init() -> String {
 /// Create a new change
 pub fn new_change(package: String, message: String, bump: String) -> String {
     format!("Creating new {bump} change for package '{package}': {message}")
-}
-
-// NAPI bindings (only compiled when napi feature is enabled)
-#[cfg(feature = "napi")]
-#[napi]
-pub fn get_version_napi() -> String {
-    get_version()
-}
-
-#[cfg(feature = "napi")]
-#[napi]
-pub fn changement_main_napi(args: Vec<String>) -> String {
-    changement_main(args)
-}
-
-#[cfg(feature = "napi")]
-#[napi]
-pub fn init_napi() -> String {
-    init()
-}
-
-#[cfg(feature = "napi")]
-#[napi]
-pub fn new_change_napi(package: String, message: String, bump: String) -> String {
-    new_change(package, message, bump)
 }

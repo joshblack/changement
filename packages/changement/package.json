@@ -1,0 +1,31 @@
+{
+  "name": "changement",
+  "version": "0.1.0",
+  "description": "Manage versioning and publishing for packages in your project",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joshblack/changement.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "changelog",
+    "versioning",
+    "monorepo",
+    "release",
+    "publishing"
+  ],
+  "files": [
+    "bin/",
+    "cli.js"
+  ],
+  "engines": {
+    "node": ">= 10"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "bin": {
+    "changement": "./cli.js"
+  }
+}

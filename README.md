@@ -16,15 +16,6 @@ Or use in a Node.js project:
 npm install changement
 ```
 
-### Programmatic Usage
-
-```javascript
-const { getVersionNapi, changementMainNapi, initNapi, newChangeNapi } = require('changement');
-
-console.log('Version:', getVersionNapi());
-console.log(changementMainNapi(['help']));
-```
-
 ## Commands
 
 | Command   | Description                                                           |

@@ -3,22 +3,9 @@ name = "changement"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib", "rlib"]
-
 [[bin]]
 name = "changement"
 path = "src/main.rs"
-required-features = []
-
-[features]
-default = []
-napi = ["dep:napi", "dep:napi-derive"]
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
-napi = { version = "2", default-features = false, features = ["napi4"], optional = true }
-napi-derive = { version = "2", optional = true }
-
-[build-dependencies]
-napi-build = "2"
