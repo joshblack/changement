@@ -1,8 +1,8 @@
 {
   "name": "changement-workspace",
   "scripts": {
-    "format": "prettier --write \"**/*.{js,ts,tsx,json,md,yaml,yml}\"",
-    "format:check": "prettier --check \"**/*.{js,ts,tsx,json,md,yaml,yml}\""
+    "format": "prettier --write \"**/*.{js,ts,tsx,json,md,yml}\"",
+    "format:check": "prettier --check \"**/*.{js,ts,tsx,json,md,yml}\""
   },
   "devDependencies": {
     "prettier": "^3.6.2"
