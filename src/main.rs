@@ -35,12 +35,11 @@ fn main() {
         .filter_or("RUST_LOG", if cli.verbose { "debug" } else { "info" });
 
     env_logger::Builder::from_env(env)
+        .format_timestamp(None)
         .format(|buf, record| match record.level() {
             log::Level::Info => writeln!(buf, "{}", record.args()),
             _ => writeln!(buf, "[{}] {}", record.level(), record.args()),
         })
-        .format_timestamp(None)
-        // .format(|buf, record| writeln!(buf, "hello"))
         .init();
 
     if let Err(e) = process(cwd, &cli.command) {
