@@ -1,5 +1,6 @@
 {
   "name": "changement-workspace",
+  "type": "module",
   "scripts": {
     "format": "prettier --write \"**/*.{js,ts,tsx,json,md,yml}\"",
     "format:check": "prettier --check \"**/*.{js,ts,tsx,json,md,yml}\""
