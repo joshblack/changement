@@ -1,2 +1,8 @@
-/target
+# OS
 .DS_Store
+
+# Rust
+/target
+
+# npm
+node_modules
