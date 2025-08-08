@@ -37,7 +37,7 @@ markdown file has the following shape:
 
 ```md
 ---
-"package-name": minor
+'package-name': minor
 ---
 
 Example description of the change
