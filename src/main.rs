@@ -3,6 +3,16 @@ use clap::{Parser, Subcommand};
 use log::{debug, info};
 use std::fs;
 use std::path::Path;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum ChangementError {
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Configuration error: {0}")]
+    Config(String),
+}
 
 #[derive(Parser)]
 #[command(name = "changement")]
@@ -296,5 +306,15 @@ mod tests {
         );
 
         std::env::set_current_dir(old_dir).unwrap();
+    }
+
+    #[test]
+    fn test_changement_error_display() {
+        let error = ChangementError::Config("test config error".to_string());
+        assert_eq!(error.to_string(), "Configuration error: test config error");
+
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let error = ChangementError::Io(io_error);
+        assert_eq!(error.to_string(), "IO error: file not found");
     }
 }
