@@ -1,12 +1,11 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::{debug, error, info};
+use names::{Generator, Name};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Parser)]
 #[command(name = "changement")]
@@ -30,9 +29,9 @@ enum Command {
     },
     /// Create a new change for a package in your project
     New {
-        /// The name of the package to create the change for
+        /// The name of the package(s) to create the change for
         #[arg(short, long)]
-        package: String,
+        package: Vec<String>,
         /// The message for the change
         #[arg(short, long)]
         message: String,
@@ -100,7 +99,7 @@ fn init_command(cwd: PathBuf, path: &str) -> Result<()> {
     Ok(())
 }
 
-fn new_command(cwd: PathBuf, package: &str, message: &str, bump: &str) -> Result<()> {
+fn new_command(cwd: PathBuf, packages: &[String], message: &str, bump: &str) -> Result<()> {
     // Validate bump type
     if !matches!(bump, "major" | "minor" | "patch") {
         return Err(anyhow::anyhow!(
@@ -118,25 +117,25 @@ fn new_command(cwd: PathBuf, package: &str, message: &str, bump: &str) -> Result
         ));
     }
 
-    debug!("Creating new change for package '{}' with bump '{}'", package, bump);
+    // Process each package
+    for package in packages {
+        debug!("Creating new change for package '{}' with bump '{}'", package, bump);
 
-    // Generate unique filename using timestamp and counter to avoid collisions
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)?
-        .as_micros();  // Use microseconds for better precision
-    let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let filename = format!("{}-{}-{}.md", timestamp, counter, package.replace(" ", "-"));
-    let change_file_path = changelog_dir.join(filename);
+        // Generate unique filename using names crate
+        let mut generator = Generator::with_naming(Name::Numbered);
+        let random_name = generator.next().unwrap();
+        let filename = format!("{}-{}.md", random_name, package.replace(" ", "-"));
+        let change_file_path = changelog_dir.join(filename);
 
-    debug!("Creating change file at {}", change_file_path.display());
+        debug!("Creating change file at {}", change_file_path.display());
 
-    // Create YAML frontmatter
-    let frontmatter = format!("---\n'{}': {}\n---\n\n{}", package, bump, message);
+        // Create YAML frontmatter
+        let frontmatter = format!("---\n'{}': {}\n---\n\n{}", package, bump, message);
 
-    fs::write(&change_file_path, frontmatter)?;
-    
-    info!("Created change file: {}", change_file_path.display());
+        fs::write(&change_file_path, frontmatter)?;
+        
+        info!("Created change file: {}", change_file_path.display());
+    }
 
     Ok(())
 }
@@ -201,7 +200,7 @@ mod tests {
 
         // Then create a new change
         let new_cmd = Command::New {
-            package: String::from("test-package"),
+            package: vec![String::from("test-package")],
             message: String::from("Test change message"),
             bump: String::from("minor"),
         };
@@ -244,7 +243,7 @@ mod tests {
 
         // Create change with major bump
         let new_cmd = Command::New {
-            package: String::from("major-package"),
+            package: vec![String::from("major-package")],
             message: String::from("Breaking change"),
             bump: String::from("major"),
         };
@@ -287,7 +286,7 @@ mod tests {
 
         // Create change with patch bump
         let new_cmd = Command::New {
-            package: String::from("patch-package"),
+            package: vec![String::from("patch-package")],
             message: String::from("Bug fix"),
             bump: String::from("patch"),
         };
@@ -330,7 +329,7 @@ mod tests {
 
         // Try to create change with invalid bump type
         let new_cmd = Command::New {
-            package: String::from("test-package"),
+            package: vec![String::from("test-package")],
             message: String::from("Test message"),
             bump: String::from("invalid"),
         };
@@ -347,7 +346,7 @@ mod tests {
 
         // Try to create change without initializing first
         let new_cmd = Command::New {
-            package: String::from("test-package"),
+            package: vec![String::from("test-package")],
             message: String::from("Test message"),
             bump: String::from("minor"),
         };
@@ -370,7 +369,7 @@ mod tests {
 
         // Create two changes for the same package
         let new_cmd1 = Command::New {
-            package: String::from("same-package"),
+            package: vec![String::from("same-package")],
             message: String::from("First change"),
             bump: String::from("minor"),
         };
@@ -380,7 +379,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(10));
 
         let new_cmd2 = Command::New {
-            package: String::from("same-package"),
+            package: vec![String::from("same-package")],
             message: String::from("Second change"),
             bump: String::from("patch"),
         };
@@ -412,5 +411,62 @@ mod tests {
         assert!(contents[0] != contents[1]);
         assert!(contents.iter().any(|c| c.contains("First change")));
         assert!(contents.iter().any(|c| c.contains("Second change")));
+    }
+
+    #[test]
+    fn test_new_command_with_multiple_packages() {
+        let temp_dir = TempDir::new().unwrap();
+        let cwd = temp_dir.path().to_path_buf();
+        
+        // Initialize first
+        let init_cmd = Command::Init {
+            path: String::from("."),
+        };
+        process(cwd.clone(), &init_cmd).unwrap();
+
+        // Create change for multiple packages
+        let new_cmd = Command::New {
+            package: vec![
+                String::from("package-one"),
+                String::from("package-two"),
+                String::from("package-three"),
+            ],
+            message: String::from("Multi-package change"),
+            bump: String::from("minor"),
+        };
+        process(cwd.clone(), &new_cmd).unwrap();
+
+        // Check that three change files were created
+        let changelog_dir = temp_dir.path().join(".changelog");
+        let entries: Vec<_> = fs::read_dir(&changelog_dir)
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let path = entry.path();
+                if path.is_file() && path.extension()? == "md" {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(entries.len(), 3);
+        
+        // Verify each file has the correct package and content
+        let mut contents = Vec::new();
+        for path in entries {
+            contents.push(fs::read_to_string(path).unwrap());
+        }
+        
+        // Check that each package has its own file with correct content
+        assert!(contents.iter().any(|c| c.contains("'package-one': minor")));
+        assert!(contents.iter().any(|c| c.contains("'package-two': minor")));
+        assert!(contents.iter().any(|c| c.contains("'package-three': minor")));
+        
+        // All files should contain the same message
+        for content in contents {
+            assert!(content.contains("Multi-package change"));
+        }
     }
 }
