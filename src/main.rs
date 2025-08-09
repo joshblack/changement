@@ -47,7 +47,7 @@ impl BumpType {
 
     fn is_greater_than(&self, other: &BumpType) -> bool {
         match (self, other) {
-            (BumpType::Major, _) => true,
+            (BumpType::Major, BumpType::Minor | BumpType::Patch) => true,
             (BumpType::Minor, BumpType::Patch) => true,
             _ => false,
         }
@@ -314,8 +314,10 @@ fn calculate_version_bumps(
     }
     
     // Second pass: handle transitive dependencies
+    let mut iteration = 0;
     let mut changed = true;
-    while changed {
+    while changed && iteration < 100 { // Safety limit to prevent infinite loops
+        iteration += 1;
         changed = false;
         let current_bumps = version_bumps.clone();
         
@@ -336,6 +338,10 @@ fn calculate_version_bumps(
                 }
             }
         }
+    }
+    
+    if iteration >= 100 {
+        return Err(anyhow::anyhow!("Dependency calculation exceeded maximum iterations (possible circular dependency)"));
     }
     
     Ok(version_bumps)
