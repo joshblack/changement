@@ -32,12 +32,12 @@ change new -p example -m "Add new feature" -b minor
 | `-m`, `--message` | The message for the change                       |
 | `-b`, `--bump`    | The type of version bump (major, minor, patch)   |
 
-New changes are stored in the `.changes` directory as a markdown file. This
+New changes are stored in the `.changelog` directory as a markdown file. This
 markdown file has the following shape:
 
 ```md
 ---
-"package-name": minor
+'package-name': minor
 ---
 
 Example description of the change
@@ -62,7 +62,7 @@ which signify that this change applies to multiple packages.
 
 ## Configuration
 
-Configuration is stored in a `.changes/config.json` file. It has the following
+Configuration is stored in a `.changelog/config.yml` file. It has the following
 structure:
 
 ```json

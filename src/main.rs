@@ -1,90 +1,134 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use log::{debug, error, info};
+use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::Path;
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum ChangementError {
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Configuration error: {0}")]
-    Config(String),
-}
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "changement")]
 #[command(about = "Manage versioning and publishing for packages in your project")]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Command,
+
+    /// Enable verbose logging
+    #[arg(short, long, global = true)]
+    verbose: bool,
 }
 
 #[derive(Subcommand)]
-enum Commands {
+enum Command {
     /// Initialize changement in a new project
-    Init,
+    Init {
+        /// The path to the project directory where changement should be initialized
+        #[arg(default_value = ".")]
+        path: String,
+    },
 }
 
 fn main() {
     let cli = Cli::parse();
+    let cwd = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+    let env = env_logger::Env::default()
+        .filter_or("RUST_LOG", if cli.verbose { "debug" } else { "info" });
 
-    let result = match &cli.command {
-        Commands::Init => init_command(),
-    };
+    env_logger::Builder::from_env(env)
+        .format_timestamp(None)
+        .format(|buf, record| match record.level() {
+            log::Level::Info => writeln!(buf, "{}", record.args()),
+            _ => writeln!(buf, "[{}] {}", record.level(), record.args()),
+        })
+        .init();
 
-    if let Err(e) = result {
-        eprintln!("Error: {e:?}");
+    if let Err(e) = process(cwd, &cli.command) {
+        error!("Error: {e:?}");
         std::process::exit(1);
     }
 }
 
-fn init_command() -> Result<()> {
-    let changes_dir = Path::new(".changes");
+fn process(cwd: PathBuf, command: &Command) -> Result<()> {
+    match command {
+        Command::Init { path } => init_command(cwd, path),
+    }
+}
 
-    // Create .changes directory if it doesn't exist
-    if !changes_dir.exists() {
-        fs::create_dir(changes_dir)?;
-        println!("Created .changes directory");
+fn init_command(cwd: PathBuf, path: &str) -> Result<()> {
+    let path = cwd.join(path);
+    let changelog_dir = path.join(".changelog");
+
+    if !changelog_dir.exists() {
+        fs::create_dir(&changelog_dir)?;
+        info!("Created .changelog directory");
     } else {
-        println!(".changes directory already exists");
+        debug!(
+            ".changelog directory already exists at {}",
+            changelog_dir.canonicalize()?.display()
+        );
     }
 
-    let config_path = changes_dir.join("config.json");
-
-    // Create config.json if it doesn't exist
+    let config_path = changelog_dir.join("config.yml");
     if !config_path.exists() {
-        let config_content = r#"{
-  "version": 1,
-  "ignore": []
-}"#;
-        fs::write(&config_path, config_content)?;
-        println!("Created .changes/config.json");
+        let contents = serde_yml::to_string(&Config::default())?;
+        fs::write(&config_path, contents)?;
+        info!("Created .changelog/config.yml");
     } else {
-        println!(".changes/config.json already exists");
+        debug!(
+            ".changelog/config.yml already exists at {}",
+            config_path.canonicalize()?.display()
+        );
     }
 
-    println!("changement initialized successfully!");
+    info!("Changement initialized successfully!");
+
     Ok(())
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Eq, PartialEq)]
+struct Config {
+    ignore: Vec<String>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+    use thiserror::Error;
 
-    #[test]
-    fn test_example() {
-        assert_eq!(true, true);
+    #[derive(Error, Debug)]
+    enum ChangementError {
+        #[error("IO error: {0}")]
+        Io(#[from] std::io::Error),
+
+        #[error("Configuration error: {0}")]
+        Config(String),
+    }
+
+    impl Config {
+        fn parse(contents: String) -> Result<Self, ChangementError> {
+            serde_yml::from_str(&contents).map_err(|e| ChangementError::Config(e.to_string()))
+        }
     }
 
     #[test]
-    fn test_changement_error_display() {
-        let error = ChangementError::Config("test config error".to_string());
-        assert_eq!(error.to_string(), "Configuration error: test config error");
+    fn test_init_command_creates_changelog_if_does_not_exist() {
+        let temp_dir = TempDir::new().unwrap();
+        let cwd = temp_dir.path().to_path_buf();
+        let cmd = Command::Init {
+            path: String::from("."),
+        };
 
-        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
-        let error = ChangementError::Io(io_error);
-        assert_eq!(error.to_string(), "IO error: file not found");
+        process(cwd, &cmd).unwrap();
+
+        assert!(temp_dir.path().join(".changelog").exists());
+        assert!(temp_dir.path().join(".changelog/config.yml").exists());
+
+        let config = Config::parse(
+            fs::read_to_string(temp_dir.path().join(".changelog/config.yml")).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(config, Config::default());
     }
 }
