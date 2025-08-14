@@ -62,7 +62,7 @@ which signify that this change applies to multiple packages.
 
 ### pre <enter|exit> <tag> command
 
-This command allows you to enter in a project or set of packages into "prerelease" mode. Any changes for this package will be captured into the project or packages exit prerelease mode.
+This command allows you to enter a project or set of packages into "prerelease" mode. Any changes for this package will be captured until the project or packages exit prerelease mode.
 
 | Option     | Description                                                                 |
 | :--------- | :-------------------------------------------------------------------------- |
