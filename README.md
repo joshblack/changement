@@ -60,6 +60,16 @@ which signify that this change applies to multiple packages.
 | :--------- | :-------------------------------------------------------------------------- |
 | `--filter` | Filter packages to create changes for (e.g. `--filter=package-a,package-b`) |
 
+### pre <enter|exit> <tag> command
+
+This command allows you to enter a project or set of packages into "prerelease" mode. Any changes for this package will be captured until the project or packages exit prerelease mode.
+
+| Option     | Description                                           |
+| :--------- | :---------------------------------------------------- |
+| `--filter` | Filter packages (e.g. `--filter=package-a,package-b`) |
+
+## Configuration
+
 ## Configuration
 
 Configuration is stored in a `.changelog/config.yml` file. It has the following
