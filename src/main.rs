@@ -8,6 +8,9 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+mod graph;
+mod workspace;
+
 #[derive(Parser)]
 #[command(name = "changement")]
 #[command(about = "Manage versioning and publishing for packages in your project")]
