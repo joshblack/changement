@@ -70,7 +70,7 @@ This command allows you to enter a project or set of packages into "prerelease" 
 
 
 ## Configuration
-
+## Configuration
 Configuration is stored in a `.changelog/config.yml` file. It has the following
 structure:
 
