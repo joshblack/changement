@@ -1,3 +1,5 @@
+use crate::graph::NodeData;
+use crate::project::{Project, Workspace};
 use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
 use log::{debug, error, info};
@@ -7,6 +9,9 @@ use std::fmt::Display;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+mod graph;
+mod project;
 
 #[derive(Parser)]
 #[command(name = "changement")]
@@ -43,6 +48,13 @@ enum Command {
         #[arg(short, long, default_value = "minor")]
         bump: VersionBump,
     },
+
+    /// Update the versions of packages based on changelog entries in the .changelog directory
+    Version {
+        /// A filter to apply to the changelog entries
+        #[arg(short, long)]
+        filter: Vec<String>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, clap::ValueEnum, Eq, PartialEq)]
@@ -56,6 +68,26 @@ enum VersionBump {
 
     #[value(name = "patch")]
     Patch,
+}
+
+impl PartialOrd for VersionBump {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (VersionBump::Major, VersionBump::Major) => Some(std::cmp::Ordering::Equal),
+            (VersionBump::Major, _) => Some(std::cmp::Ordering::Greater),
+            (_, VersionBump::Major) => Some(std::cmp::Ordering::Less),
+            (VersionBump::Minor, VersionBump::Minor) => Some(std::cmp::Ordering::Equal),
+            (VersionBump::Minor, _) => Some(std::cmp::Ordering::Greater),
+            (_, VersionBump::Minor) => Some(std::cmp::Ordering::Less),
+            (VersionBump::Patch, VersionBump::Patch) => Some(std::cmp::Ordering::Equal),
+        }
+    }
+}
+
+impl Ord for VersionBump {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
+    }
 }
 
 impl Display for VersionBump {
@@ -96,6 +128,7 @@ fn process(cwd: PathBuf, command: &Command) -> Result<()> {
             message,
             bump,
         } => new_command(cwd, package, message, bump),
+        Command::Version { filter } => version_command(cwd, filter),
     }
 }
 
@@ -162,9 +195,100 @@ fn new_command(cwd: PathBuf, package: &str, message: &str, bump: &VersionBump) -
     Ok(())
 }
 
+fn version_command(cwd: PathBuf, filter: &Vec<String>) -> Result<()> {
+    let project = Project::new(&cwd);
+    let changelog_dir = cwd.join(".changelog");
+    if !changelog_dir.exists() {
+        return Err(anyhow!(
+            "Changelog directory does not exist at {}",
+            changelog_dir.display()
+        ));
+    }
+
+    let changelog_entries = get_changelog_entries(&changelog_dir)?;
+    let changes = changelog_entries.iter().flat_map(|entry| {
+        entry
+            .frontmatter
+            .iter()
+            .filter_map(|(package, bump)| {
+                if filter.is_empty() || filter.contains(package) {
+                    Some((package, bump))
+                } else {
+                    None
+                }
+            })
+            .filter_map(|(package, bump)| {
+                if let Some(workspace) = project.get_workspace(package) {
+                    Some((workspace, bump))
+                } else {
+                    None
+                }
+            })
+    });
+    let bumps: HashMap<&NodeData<Workspace>, &VersionBump> = changes.into_iter().collect();
+
+    for (workspace, bump) in bumps {
+        bump_workspace(workspace, bump);
+    }
+
+    fn bump_workspace(workspace: &NodeData<Workspace>, bump: &VersionBump) {
+        //
+    }
+
+    Ok(())
+}
+
+// Filtering
+// Coming from pnpm: https://pnpm.io/filtering
+// patterns:
+//   - wildcard
+//   - path
+//   - name
+//   - dependencies (foo...) matches foo and all of its dependencies
+//   - only dependencies (foo^...)
+//   - dependents (...foo)
+//   - only dependents (...^foo)
+//   - glob
+//   - [<since>] which could be a branch
+//   - exclusion (with a ! in front of a pattern)
+
 struct ChangelogEntry {
     frontmatter: HashMap<String, VersionBump>,
     body: String,
+}
+
+fn get_changelog_entries(directory: impl AsRef<Path>) -> Result<Vec<ChangelogEntry>> {
+    let changelog_dir = directory.as_ref().join(".changelog");
+    if !changelog_dir.exists() {
+        return Err(anyhow!(
+            "Changelog directory does not exist at {}",
+            changelog_dir.display()
+        ));
+    }
+    let mut entries = fs::read_dir(&changelog_dir)?
+        .filter_map(|e| e.ok())
+        .filter_map(|entry| {
+            if entry.path().extension() == Some(std::ffi::OsStr::new("md")) {
+                let metadata = std::fs::metadata(entry.path()).expect("Failed to read metadata");
+                let contents = fs::read_to_string(entry.path()).expect("Failed to read file");
+                let changelog_entry =
+                    ChangelogEntry::from_string(contents).expect("Failed to parse changelog entry");
+                Some((
+                    metadata.created().expect("Failed to get created time"),
+                    changelog_entry,
+                ))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Sort entries by creation time
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let entries = entries.into_iter().map(|e| e.1).collect::<Vec<_>>();
+
+    Ok(entries)
 }
 
 impl ChangelogEntry {
