@@ -1,9 +1,10 @@
-use crate::graph::{Graph, NodeData, NodeIndex};
+use crate::graph::{Direction, Graph, Node, NodeIndex};
 use globset::{Glob, GlobSetBuilder};
 use ignore::Walk;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::str::FromStr;
 use std::{collections::HashMap, path::PathBuf};
 
 pub struct Project {
@@ -45,7 +46,7 @@ impl Project {
             }
 
             let set = builder.build().expect("Failed to build GlobSet");
-            let walker = Walk::new(&workspace.directory)
+            let walker = Walk::new(&workspace.data.directory)
                 .filter_map(|e| e.ok())
                 .filter(|e| set.is_match(e.path()))
                 .filter(|e| {
@@ -65,7 +66,7 @@ impl Project {
                         .get_node(*child_workspace_index)
                         .expect("Child workspace node should exist in the graph");
 
-                    if child_workspace.directory == directory.path() {
+                    if child_workspace.data.directory == directory.path() {
                         Some(*child_workspace_index)
                     } else {
                         None
@@ -73,7 +74,8 @@ impl Project {
                 });
 
                 if let Some(child_workspace_index) = child_workspace {
-                    graph.add_edge(*node_index, *child_workspace_index);
+                    graph.add_edge(*node_index, *child_workspace_index, Direction::Incoming);
+                    graph.add_edge(*child_workspace_index, *node_index, Direction::Outgoing);
                 }
             }
         }
@@ -84,45 +86,57 @@ impl Project {
         }
     }
 
-    pub fn get_workspaces(&self) -> impl Iterator<Item = &NodeData<Workspace>> {
+    pub fn get_workspaces(&self) -> impl Iterator<Item = (NodeIndex, &Node<Workspace>)> {
         self.graph.get_nodes()
     }
 
-    pub fn get_workspace(&self, name: &str) -> Option<&NodeData<Workspace>> {
+    pub fn get_workspace(&self, name: &str) -> Option<(NodeIndex, &Node<Workspace>)> {
         self.graph
             .get_nodes()
-            .find(|node| node.data.name.as_deref() == Some(name))
+            .find(|(_, node)| node.data.name.as_deref() == Some(name))
     }
 
-    pub fn dependents(&self, workspace: NodeIndex) -> impl Iterator<Item = &NodeData<Workspace>> {
-        self.graph
-            .edges(workspace)
-            .filter_map(|node_index| self.graph.get_node(node_index))
+    pub fn workspace(&self, workspace: NodeIndex) -> Option<&Node<Workspace>> {
+        self.graph.get_node(workspace)
+    }
+
+    pub fn dependents(&self, workspace: NodeIndex) -> impl Iterator<Item = NodeIndex> {
+        self.graph.edges(workspace, Direction::Incoming)
+    }
+
+    pub fn dependencies(&self, workspace: NodeIndex) -> impl Iterator<Item = NodeIndex> {
+        self.graph.edges(workspace, Direction::Outgoing)
     }
 }
 
 #[derive(Hash, Eq, PartialEq)]
 pub struct Workspace {
     directory: PathBuf,
-    name: Option<String>,
+    pub name: Option<String>,
     version: Option<Version>,
-    dependencies: Vec<(String, String)>,
+    dependencies: Vec<(String, DependencyVersion)>,
 }
 
 impl Workspace {
     pub fn new(directory: impl AsRef<Path>, package_json: &PackageJson) -> Self {
-        let mut dependencies: Vec<(String, String)> = Vec::new();
+        let mut dependencies: Vec<(String, DependencyVersion)> = Vec::new();
 
         for (name, version) in &package_json.dependencies {
-            dependencies.push((name.into(), version.into()));
+            if let Ok(version) = version.parse::<DependencyVersion>() {
+                dependencies.push((name.into(), version));
+            }
         }
 
         for (name, version) in &package_json.dev_dependencies {
-            dependencies.push((name.into(), version.into()));
+            if let Ok(version) = version.parse::<DependencyVersion>() {
+                dependencies.push((name.into(), version));
+            }
         }
 
         for (name, version) in &package_json.peer_dependencies {
-            dependencies.push((name.into(), version.into()));
+            if let Ok(version) = version.parse::<DependencyVersion>() {
+                dependencies.push((name.into(), version));
+            }
         }
 
         Self {
@@ -130,6 +144,37 @@ impl Workspace {
             name: package_json.name.clone(),
             version: package_json.version.clone(),
             dependencies,
+        }
+    }
+
+    pub fn dependency_version(&self, name: &str) -> Option<&DependencyVersion> {
+        self.dependencies
+            .iter()
+            .find_map(|(n, v)| if n == name { Some(v) } else { None })
+    }
+}
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub enum DependencyVersion {
+    VersionReq(semver::VersionReq),
+    WorkspaceVersionReq(String, semver::VersionReq),
+}
+
+impl FromStr for DependencyVersion {
+    type Err = anyhow::Error;
+
+    fn from_str(version: &str) -> Result<Self, Self::Err> {
+        if version.starts_with("workspace:") {
+            let parts: Vec<&str> = version.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                let version_req = semver::VersionReq::parse(parts[1])?;
+                Ok(Self::WorkspaceVersionReq(parts[0].to_string(), version_req))
+            } else {
+                Err(anyhow::anyhow!("Invalid workspace version format"))
+            }
+        } else {
+            let version_req = semver::VersionReq::parse(version)?;
+            Ok(Self::VersionReq(version_req))
         }
     }
 }

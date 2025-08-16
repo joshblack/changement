@@ -1,4 +1,4 @@
-use crate::graph::NodeData;
+use crate::graph::{Node, NodeIndex};
 use crate::project::{Project, Workspace};
 use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
@@ -218,21 +218,35 @@ fn version_command(cwd: PathBuf, filter: &Vec<String>) -> Result<()> {
                 }
             })
             .filter_map(|(package, bump)| {
-                if let Some(workspace) = project.get_workspace(package) {
-                    Some((workspace, bump))
+                if let Some((index, _)) = project.get_workspace(package) {
+                    Some((index, bump))
                 } else {
                     None
                 }
             })
     });
-    let bumps: HashMap<&NodeData<Workspace>, &VersionBump> = changes.into_iter().collect();
+    let bumps: HashMap<NodeIndex, &VersionBump> = changes.into_iter().collect();
 
-    for (workspace, bump) in bumps {
-        bump_workspace(workspace, bump);
+    for (index, bump) in bumps {
+        bump_workspace(&project, index, bump);
     }
 
-    fn bump_workspace(workspace: &NodeData<Workspace>, bump: &VersionBump) {
-        //
+    fn bump_workspace(project: &Project, workspace_index: NodeIndex, bump: &VersionBump) {
+        let workspace = project
+            .workspace(workspace_index)
+            .expect("Workspace not found");
+
+        for dependent_index in project.dependents(workspace_index) {
+            let dependent = project
+                .workspace(dependent_index)
+                .expect("Dependent workspace not found");
+            let version = dependent.data.dependency_version(&workspace.data.name);
+            // if !from_parent_update {
+            // bump_workspace(&project, dependent, bump, true);
+            // } else {
+            // //
+            // }
+        }
     }
 
     Ok(())

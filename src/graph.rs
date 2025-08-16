@@ -1,6 +1,6 @@
 pub struct Graph<T> {
-    nodes: Vec<NodeData<T>>,
-    edges: Vec<EdgeData>,
+    nodes: Vec<Node<T>>,
+    edges: Vec<Edge>,
 }
 
 impl<T> Graph<T> {
@@ -13,45 +13,70 @@ impl<T> Graph<T> {
 
     pub fn add_node(&mut self, data: T) -> NodeIndex {
         let index = self.nodes.len();
-        self.nodes.push(NodeData {
+        self.nodes.push(Node {
             data,
-            first_outgoing_edge: None,
+            first_edge: None,
         });
         index
     }
 
-    pub fn get_node(&self, index: NodeIndex) -> Option<&NodeData<T>> {
+    pub fn get_node(&self, index: NodeIndex) -> Option<&Node<T>> {
         self.nodes.get(index)
     }
 
-    pub fn get_nodes(&self) -> impl Iterator<Item = &NodeData<T>> {
-        self.nodes.iter()
+    pub fn get_nodes(&self) -> impl Iterator<Item = (NodeIndex, &Node<T>)> {
+        self.nodes.iter().enumerate()
     }
 
-    pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex) {
+    pub fn add_edge(&mut self, source: NodeIndex, target: NodeIndex, direction: Direction) {
         let edge_index = self.edges.len();
         let node_data = &mut self.nodes[source];
 
-        self.edges.push(EdgeData {
+        self.edges.push(Edge {
             target,
-            next_outgoing_edge: node_data.first_outgoing_edge,
+            direction,
+            next_edge: node_data.first_edge,
         });
 
-        node_data.first_outgoing_edge = Some(edge_index);
+        node_data.first_edge = Some(edge_index);
     }
 
-    pub fn edges(&self, source: NodeIndex) -> Edges<'_, T> {
-        let first_outgoing_edge = self.nodes[source].first_outgoing_edge;
+    pub fn edges(&self, source: NodeIndex, direction: Direction) -> Edges<'_, T> {
+        let first_edge = self.nodes[source].first_edge;
         Edges {
             graph: self,
-            current_edge_index: first_outgoing_edge,
+            current_edge_index: first_edge,
+            direction,
         }
     }
+}
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub struct Node<T> {
+    pub data: T,
+    first_edge: Option<EdgeIndex>,
+}
+
+pub type NodeIndex = usize;
+
+struct Edge {
+    target: NodeIndex,
+    direction: Direction,
+    next_edge: Option<EdgeIndex>,
+}
+
+type EdgeIndex = usize;
+
+#[derive(Eq, PartialEq)]
+pub enum Direction {
+    Outgoing,
+    Incoming,
 }
 
 pub struct Edges<'graph, T> {
     graph: &'graph Graph<T>,
     current_edge_index: Option<EdgeIndex>,
+    direction: Direction,
 }
 
 impl<'graph, T> Iterator for Edges<'graph, T> {
@@ -61,27 +86,22 @@ impl<'graph, T> Iterator for Edges<'graph, T> {
         match self.current_edge_index {
             None => None,
             Some(edge_num) => {
-                let edge = &self.graph.edges[edge_num];
-                self.current_edge_index = edge.next_outgoing_edge;
+                let mut edge = &self.graph.edges[edge_num];
+
+                while self.direction != edge.direction {
+                    if let Some(next_edge_index) = edge.next_edge {
+                        edge = &self.graph.edges[next_edge_index];
+                    } else {
+                        self.current_edge_index = None;
+                        return None;
+                    }
+                }
+
+                self.current_edge_index = edge.next_edge;
                 Some(edge.target)
             }
         }
     }
-}
-
-pub type NodeIndex = usize;
-
-#[derive(Hash, Eq, PartialEq, Debug)]
-pub struct NodeData<T> {
-    pub data: T,
-    first_outgoing_edge: Option<EdgeIndex>,
-}
-
-type EdgeIndex = usize;
-
-struct EdgeData {
-    target: NodeIndex,
-    next_outgoing_edge: Option<EdgeIndex>,
 }
 
 #[cfg(test)]
@@ -89,26 +109,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_graph() {
-        let mut graph = Graph::new();
-        let node_a = graph.add_node("A");
-        let node_b = graph.add_node("B");
-        let node_c = graph.add_node("C");
-        graph.add_edge(node_a, node_b);
-        graph.add_edge(node_a, node_c);
-        graph.add_edge(node_b, node_c);
+    fn test_add_node() {
+        let mut graph: Graph<&str> = Graph::new();
 
-        assert_eq!(graph.nodes.len(), 3);
-        assert_eq!(graph.edges.len(), 3);
+        let index = graph.add_node("a");
+        assert_eq!(graph.nodes.len(), 1);
 
-        assert_eq!(graph.get_node(node_a).unwrap().data, "A");
-        assert_eq!(graph.get_node(node_b).unwrap().data, "B");
-        assert_eq!(graph.get_node(node_c).unwrap().data, "C");
+        let node = graph.get_node(index).unwrap();
+        assert_eq!(node.data, "a");
+    }
 
-        assert_eq!(
-            graph.edges(node_a).collect::<Vec<_>>(),
-            vec![node_c, node_b]
-        );
-        assert_eq!(graph.edges(node_b).collect::<Vec<_>>(), vec![node_c]);
+    #[test]
+    fn test_add_edge() {
+        let mut graph: Graph<&str> = Graph::new();
+
+        let a_index = graph.add_node("a");
+        let b_index = graph.add_node("b");
+
+        graph.add_edge(a_index, b_index, Direction::Outgoing);
+
+        let edges = graph
+            .edges(a_index, Direction::Outgoing)
+            .collect::<Vec<_>>();
+
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0], b_index);
+
+        graph.add_edge(b_index, a_index, Direction::Incoming);
+
+        let edges = graph
+            .edges(b_index, Direction::Incoming)
+            .collect::<Vec<_>>();
+
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0], a_index);
     }
 }
