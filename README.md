@@ -68,6 +68,36 @@ This command allows you to enter a project or set of packages into "prerelease" 
 | :--------- | :---------------------------------------------------- |
 | `--filter` | Filter packages (e.g. `--filter=package-a,package-b`) |
 
+## Channels
+
+Provides support for publishing to different channels. This could be helpful for publishing an experimental channel, canary, prerelease, etc. The idea is to support continous releases based on branches.
+
+```json
+{
+  "channels": [
+    {
+      "name": "stable",
+      "branch": "main",
+      "publish": "on-demand",
+      "version": "semver"
+    },
+    {
+      "name": "canary",
+      "branch": "main",
+      "publish": "auto",
+      "version": "snapshot"
+    },
+    {
+      "name": "experimental",
+      "branch": "main",
+      "version": "snapshot",
+      "publish": "auto",
+      "command": "npm run publish:experimental"
+    }
+  ]
+}
+```
+
 ## Configuration
 
 ## Configuration
