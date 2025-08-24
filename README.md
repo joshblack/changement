@@ -51,6 +51,7 @@ which signify that this change applies to multiple packages.
 | Option     | Description                                                                 |
 | :--------- | :-------------------------------------------------------------------------- |
 | `--filter` | Filter packages to create changes for (e.g. `--filter=package-a,package-b`) |
+| `--snapshot` | Version packages based on the current git hash (useful for canary publishing). Outputs `0.0.0-{hash}` or `X.Y.Z-rc.{hash}` |
 
 ### publish command
 
