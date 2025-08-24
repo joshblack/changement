@@ -7,6 +7,9 @@ use std::fmt::Display;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
+
+mod workspace;
 
 #[derive(Parser)]
 #[command(name = "changement")]
@@ -43,6 +46,9 @@ enum Command {
         #[arg(short, long, default_value = "minor")]
         bump: VersionBump,
     },
+
+    /// Apply changelog entries to version packages in the project
+    Version,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, clap::ValueEnum, Eq, PartialEq)]
@@ -65,6 +71,64 @@ impl Display for VersionBump {
             VersionBump::Minor => write!(f, "minor"),
             VersionBump::Patch => write!(f, "patch"),
         }
+    }
+}
+
+struct Project {
+    directory: PathBuf,
+    changelog_directory: PathBuf,
+}
+
+impl Project {
+    fn new(directory: PathBuf) -> Self {
+        Self {
+            directory: directory.clone(),
+            changelog_directory: directory.join(".changelog"),
+        }
+    }
+
+    fn find(cwd: PathBuf) -> Option<Self> {
+        let directory = cwd.ancestors().find_map(|ancestor| {
+            let changelog_dir = ancestor.join(".changelog");
+            if changelog_dir.exists() {
+                Some(changelog_dir)
+            } else {
+                None
+            }
+        });
+
+        if let Some(directory) = directory {
+            let project = Self::new(directory);
+            Some(project)
+        } else {
+            None
+        }
+    }
+
+    fn get_changelog_entries(&self) -> Vec<ChangelogEntry> {
+        let mut changelog_entries: Vec<ChangelogEntry> = Vec::new();
+
+        let saved_entries = fs::read_dir(&self.changelog_directory).map(|entries| {
+            entries
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|path| {
+                    path.is_file() && path.extension() == Some(std::ffi::OsStr::new("md"))
+                })
+                .filter_map(|path| {
+                    fs::read_to_string(&path)
+                        .ok()
+                        .and_then(|contents| ChangelogEntryContent::from_string(contents).ok())
+                        .and_then(|content| Some(ChangelogEntry { path, content }))
+                })
+                .collect::<Vec<ChangelogEntry>>()
+        });
+
+        if let Ok(mut entries) = saved_entries {
+            changelog_entries.append(&mut entries);
+        }
+
+        changelog_entries
     }
 }
 
@@ -96,6 +160,7 @@ fn process(cwd: PathBuf, command: &Command) -> Result<()> {
             message,
             bump,
         } => new_command(cwd, package, message, bump),
+        Command::Version => version_command(),
     }
 }
 
@@ -146,7 +211,7 @@ fn new_command(cwd: PathBuf, package: &str, message: &str, bump: &VersionBump) -
             }
         })
         .ok_or(anyhow!("Unable to generate name for new changelog entry"))?;
-    let changelog_entry = ChangelogEntry {
+    let changelog_entry = ChangelogEntryContent {
         frontmatter: HashMap::from([(package.into(), bump.clone())]),
         body: message.to_string(),
     };
@@ -162,12 +227,21 @@ fn new_command(cwd: PathBuf, package: &str, message: &str, bump: &VersionBump) -
     Ok(())
 }
 
+fn version_command() -> Result<()> {
+    Ok(())
+}
+
 struct ChangelogEntry {
+    path: PathBuf,
+    content: ChangelogEntryContent,
+}
+
+struct ChangelogEntryContent {
     frontmatter: HashMap<String, VersionBump>,
     body: String,
 }
 
-impl ChangelogEntry {
+impl ChangelogEntryContent {
     fn to_string(&self) -> Result<String, serde_yml::Error> {
         let frontmatter_yaml = serde_yml::to_string(&self.frontmatter)?;
         Ok(format!("---\n{}---\n\n{}", frontmatter_yaml, self.body))
@@ -182,7 +256,7 @@ impl ChangelogEntry {
 
         let frontmatter: HashMap<String, VersionBump> = serde_yml::from_str(parts[1].trim())?;
 
-        Ok(ChangelogEntry {
+        Ok(ChangelogEntryContent {
             frontmatter,
             body: parts[2].trim().to_string(),
         })
@@ -272,7 +346,7 @@ mod tests {
         assert!(file.exists());
 
         let contents = fs::read_to_string(file)?;
-        let changelog_entry = ChangelogEntry::from_string(contents)?;
+        let changelog_entry = ChangelogEntryContent::from_string(contents)?;
 
         assert_eq!(
             changelog_entry.frontmatter.get("test-package").unwrap(),
