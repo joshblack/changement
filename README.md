@@ -68,6 +68,10 @@ This command allows you to enter a project or set of packages into "prerelease" 
 | :--------- | :---------------------------------------------------- |
 | `--filter` | Filter packages (e.g. `--filter=package-a,package-b`) |
 
+### plan command
+
+Return the result of applying the current changes (should be output as json with `--json` command)
+
 ## Configuration
 
 ## Configuration
